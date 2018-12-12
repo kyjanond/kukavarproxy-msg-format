@@ -1,12 +1,20 @@
 import socket                                                   # Used for TCP/IP communication
-client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)		# Initializing client connection
+import select
+
+TIMEOUT = 1
+
+class KUKAException(Exception):
+    pass
 
 class KUKA(object):
 
     def __init__(self, TCP_IP):
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)		# Initializing client connection
+        self.client.settimeout(TIMEOUT)
+
         try: 
-            client.connect((TCP_IP, 7000))                      # Open socket. kukavarproxy actively listens on TCP port 7000
-        except: 
+            self.client.connect((TCP_IP, 7000))                      # Open socket. kukavarproxy actively listens on TCP port 7000
+        except Exception as e:
             self.error_list(1)
 
 
@@ -40,12 +48,15 @@ class KUKA(object):
             temp.append((len(msg) & 0xff00) >> 8)               # MSB of message length
             temp.append((len(msg) & 0x00ff))                    # LSB of message length
             msg = temp + msg
-        except :
+        except Exception as e:
+            raise e
             self.error_list(2)
         try:
-            client.send(msg)
-            return  client.recv(1024)                           # Return response with buffer size of 1024 bytes
-        except :
+            self.client.send(msg)
+            recv_msg = self.client.recv(1024)
+            return  recv_msg                           # Return response with buffer size of 1024 bytes
+        except Exception as e:
+            raise e
             self.error_list(1)
 
 
@@ -74,13 +85,15 @@ class KUKA(object):
             return str(msg [7: 7+lenValue],'utf-8')  
             """
 
-        except:
+        except Exception as e:
+            raise e
             self.error_list(2)
 
     def read (self, var, msgID=0):
         try:
             return self.__get_var(self.send(var,"",msgID))  
-        except :
+        except Exception as e:
+            raise e
             self.error_list(2)
 
 
@@ -93,20 +106,20 @@ class KUKA(object):
 
 
     def disconnect (self):
-            client.close()                                      # CLose socket
+        print "disconnecting"    
+        self.client.close()                                      # CLose socket
 
 
-    def error_list (self, ID):
+    def error_list (self, ID, e=Exception()):
         if ID == 1:
-            print ("Network Error (tcp_error)")
-            print ("    Check your KRC's IP address on the network, and make sure kukaproxyvar is running.")
+            #print ("Network Error (tcp_error)")
+            #print ("    Check your KRC's IP address on the network, and make sure kukaproxyvar is running.")
             self.disconnect()
-            raise SystemExit
+            raise KUKAException("Network Error (TCP_error)")
         elif ID == 2:
-            print ("Python Error.")
-            print ("    Check the code and uncomment the lines related to your python version.")
+            #print ("Python Error.")
+            #print ("    Check the code and uncomment the lines related to your python version.")
             self.disconnect()
-            raise SystemExit
+            raise KUKAException("Python Error.")
         elif ID == 3:
-            print ("Error in write() statement.")
-            print ("    Variable value is not defined.")
+            print ("Error in write() statement. Variable value is not defined.")
